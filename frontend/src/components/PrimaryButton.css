@@ -1,0 +1,11 @@
+.qems-primary-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+}
+
+.qems-primary-btn--full {
+  display: flex;
+  width: 100%;
+}
