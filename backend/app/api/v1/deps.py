@@ -37,3 +37,18 @@ def require_role(*allowed_roles: str):
         return user
 
     return _guard
+
+
+# Roles that may see data outside their own department -- Admin and QA Reviewer already
+# have cross-department duties everywhere else in this app (status transitions,
+# decisions, audit verification), so they are unrestricted here too. Everyone else is
+# scoped to their own department_id. Shared by every endpoint that needs department-level
+# visibility (AI neighbour retrieval in signal.py, direct error/evidence reads).
+GLOBAL_SCOPE_ROLES = {"Admin", "QA Reviewer"}
+
+
+def visible_departments(user: User) -> list[int] | None:
+    """None means unrestricted (all departments); otherwise the department_ids the user may see."""
+    if set(user.role_names) & GLOBAL_SCOPE_ROLES:
+        return None
+    return [user.department_id] if user.department_id else []

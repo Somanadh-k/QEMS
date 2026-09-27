@@ -24,6 +24,7 @@ export const AppProvider = ({ children }) => {
 
   const [departments, setDepartments] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [processes, setProcesses] = useState([]);
   const [users, setUsers] = useState([]);
 
   const [activeTab, setActiveTab] = useState(() => (isLoggedIn ? 'dashboard' : 'login'));
@@ -75,27 +76,46 @@ export const AppProvider = ({ children }) => {
 
   const loadLookups = useCallback(async () => {
     try {
-      const [deps, cats, usrs] = await Promise.all([
+      const [deps, cats, usrs, procs] = await Promise.all([
         api.listDepartments(),
         api.listCategories(),
         api.listUsers(),
+        api.listProcesses(),
       ]);
       setDepartments(deps);
       setCategories(cats);
       setUsers(usrs);
-      return { departments: deps, categories: cats, users: usrs };
+      setProcesses(procs);
+      return { departments: deps, categories: cats, users: usrs, processes: procs };
     } catch (err) {
       handleApiError(err, 'Failed to load reference data.');
-      return { departments: [], categories: [], users: [] };
+      return { departments: [], categories: [], users: [], processes: [] };
     }
   }, [handleApiError]);
 
+  // Dashboard/QA-Errors-list totals are derived client-side by filtering this array, so
+  // it has to hold every record rather than just the first page -- a hard-coded
+  // page_size:100 with `res.total` discarded meant every KPI tile went silently wrong
+  // past 100 errors (finding D-01). page_size:100 is the API's own max, so this loops
+  // pages rather than requesting a bigger one. MAX_PAGES is a sanity cap, not a real
+  // limit: it stops a runaway loop rather than being expected to bind in practice.
+  const PAGE_SIZE = 100;
+  const MAX_PAGES = 50; // 5,000 records
   const fetchErrorsWith = useCallback(
     async (lookups) => {
       setErrorsLoading(true);
       try {
-        const res = await api.listErrors({ page: 1, page_size: 100 });
-        setErrors(res.items.map((item) => mapListItem(item, lookups)));
+        const items = [];
+        let page = 1;
+        let total = Infinity;
+        while (items.length < total && page <= MAX_PAGES) {
+          const res = await api.listErrors({ page, page_size: PAGE_SIZE });
+          items.push(...res.items);
+          total = res.total;
+          if (res.items.length === 0) break; // defensive: avoid an infinite loop
+          page += 1;
+        }
+        setErrors(items.map((item) => mapListItem(item, lookups)));
       } catch (err) {
         handleApiError(err, 'Failed to load QA errors.');
       } finally {
@@ -232,6 +252,7 @@ export const AppProvider = ({ children }) => {
         transitionErrorStatus,
         addRebuttal,
         recordDecision,
+        processes,
         loginUser,
         logoutUser,
       }}

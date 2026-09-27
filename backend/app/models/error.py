@@ -2,7 +2,19 @@ from datetime import date, datetime
 from enum import StrEnum
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import CheckConstraint, Date, ForeignKey, Index, String, Text, func
+from sqlalchemy import (
+    BigInteger,
+    CheckConstraint,
+    Date,
+    ForeignKey,
+    Index,
+    Numeric,
+    SmallInteger,
+    String,
+    Text,
+    func,
+)
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
@@ -22,9 +34,11 @@ class ErrorStatus(StrEnum):
     IN_REVIEW = "In Review"
     REBUTTAL_RAISED = "Rebuttal Raised"
     QA_DECISION_PENDING = "QA Decision Pending"
+    ESCALATED = "Escalated"
     RESOLVED = "Resolved"
     REJECTED = "Rejected"
     CLOSED = "Closed"
+    REOPENED = "Reopened"
 
 
 class Error(Base):
@@ -38,6 +52,8 @@ class Error(Base):
         Index("idx_errors_status", "status"),
         Index("idx_errors_department", "department_id"),
         Index("idx_errors_due_at", "due_at"),
+        Index("idx_errors_governance", "sla_state", "risk_score"),
+        Index("idx_errors_recurrence", "category_id", "process_id", "created_at"),
     )
 
     error_id: Mapped[int] = mapped_column(primary_key=True)
@@ -59,6 +75,24 @@ class Error(Base):
     # Not in the original report's DDL — added so AI similarity search (Section 13.2) has
     # somewhere to persist the OpenAI embedding computed at creation time.
     description_embedding: Mapped[list[float] | None] = mapped_column(Vector(EMBEDDING_DIM))
+    # Which model produced the vector, and a hash of the text it was produced from, so a
+    # description edited after embedding is detectable rather than silently stale.
+    embedding_model: Mapped[str | None] = mapped_column(String(60))
+    embedded_at: Mapped[datetime | None]
+    embedding_source_hash: Mapped[str | None] = mapped_column(String(64))
+    process_id: Mapped[int | None] = mapped_column(ForeignKey("processes.process_id"))
+
+    # --- SLA & governance (proposal SLA-02 / RS-08) -------------------------
+    sla_state: Mapped[str] = mapped_column(String(20), nullable=False, default="ON_TRACK")
+    sla_stage: Mapped[str | None] = mapped_column(String(20))
+    sla_due_at: Mapped[datetime | None]
+    sla_clock_owner_role: Mapped[str | None] = mapped_column(String(50))
+    sla_paused_ms: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    escalation_level: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=0)
+    risk_score: Mapped[float | None] = mapped_column(Numeric(5, 2))
+    risk_score_breakdown: Mapped[dict | None] = mapped_column(JSONB)
+    risk_computed_at: Mapped[datetime | None]
+    round_no: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=1)
 
     category: Mapped["Category"] = relationship()
     department: Mapped["Department"] = relationship()
@@ -66,4 +100,6 @@ class Error(Base):
     rebuttals: Mapped[list["Rebuttal"]] = relationship(back_populates="error", cascade="all, delete-orphan")
     decisions: Mapped[list["QADecision"]] = relationship(back_populates="error", cascade="all, delete-orphan")
     audit_logs: Mapped[list["AuditLog"]] = relationship(back_populates="error")
+    insights: Mapped[list["AIInsight"]] = relationship(back_populates="error", cascade="all, delete-orphan")
     notifications: Mapped[list["Notification"]] = relationship(back_populates="error")
+    messages: Mapped[list["Message"]] = relationship(back_populates="error", cascade="all, delete-orphan")

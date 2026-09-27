@@ -1,0 +1,19 @@
+[Unit]
+Description=QEMS backend (uvicorn)
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/QEMS/backend
+EnvironmentFile=/home/ubuntu/QEMS/backend/.env
+ExecStart=/home/ubuntu/QEMS/backend/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 2
+Restart=on-failure
+RestartSec=5
+
+# Free-tier t2/t3.micro only has 1GB RAM -- cap it so a leak can't take the whole box down;
+# systemd restarts the service instead of the OOM killer picking a random process.
+MemoryMax=700M
+
+[Install]
+WantedBy=multi-user.target

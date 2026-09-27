@@ -20,6 +20,12 @@ export const mapListItem = (item, { departments, categories }) => ({
   dueAt: item.due_at,
   date: item.created_at?.split('T')[0],
   createdAt: item.created_at,
+  // Governance fields (SLA-02 / RS-08) — drive the queue's sort order and state chips.
+  slaState: item.sla_state,
+  slaDueAt: item.sla_due_at,
+  clockOwner: item.sla_clock_owner_role,
+  riskScore: item.risk_score,
+  escalationLevel: item.escalation_level,
 });
 
 export const mapRebuttal = (r, users) => ({

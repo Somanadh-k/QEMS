@@ -1,3 +1,4 @@
+import uuid
 from datetime import date
 
 import pytest
@@ -38,12 +39,17 @@ async def _make_user(session, role_name: str, department_id: int, email: str) ->
 
 
 async def _make_category_and_department(session) -> tuple[Category, Department]:
-    department = Department(name="Test Dept")
+    # Unique per call (not a hardcoded literal) since these tests run against the real
+    # dev Postgres, not an isolated per-run database -- see test_error_authorization.py's
+    # identical convention, adopted here after a stale "Test Dept" row from a prior
+    # non-clean run (e.g. a killed process) collided with this fixture's unique constraint.
+    tag = uuid.uuid4().hex[:8]
+    department = Department(name=f"Test Dept {tag}")
     sla_policy = SLAPolicy(severity="High", sla_hours=24)
     session.add_all([department, sla_policy])
     await session.flush()
 
-    category = Category(name="Test Category", sla_policy_id=sla_policy.sla_policy_id)
+    category = Category(name=f"Test Category {tag}", sla_policy_id=sla_policy.sla_policy_id)
     session.add(category)
     await session.flush()
     return category, department
@@ -133,3 +139,52 @@ async def test_invalid_transition_raises_conflict(db_session):
 
     with pytest.raises(ConflictError):
         await service.transition_status(error, ErrorStatus.CLOSED, qa_user)
+
+
+@pytest.mark.asyncio
+async def test_evidence_upload_response_includes_hash_and_uploader(db_session):
+    """QEMS_Demo_Runbook.md Step 6 narrates the SHA-256 hash and the uploader as visible
+    evidence metadata; both are real columns on Evidence but were previously missing from
+    EvidenceUploadResponse/EvidenceSummary, so the API silently dropped them.
+
+    upload_evidence() commits internally (it's a router function, not a service), so
+    calling it directly with db_session -- as every other test in this file does with
+    non-committing service calls -- persists its rows for real past this fixture's final
+    rollback. A unique email avoids colliding on repeat runs, matching the same
+    already-established convention in test_error_authorization.py.
+    """
+    import io
+    import uuid
+
+    from fastapi import UploadFile
+    from starlette.datastructures import Headers
+
+    from app.api.v1.routers.evidence import upload_evidence
+
+    category, department = await _make_category_and_department(db_session)
+    qa_user = await _make_user(
+        db_session, "QA Reviewer", department.department_id, f"qa_evidence_{uuid.uuid4().hex[:8]}@qemscorp.dev"
+    )
+    error = await ErrorService(db_session).create_error(
+        title="Evidence metadata test",
+        description="desc",
+        category_id=category.category_id,
+        severity="Low",
+        department_id=department.department_id,
+        date_discovered=date.today(),
+        raised_by=qa_user.user_id,
+        assigned_to=None,
+        embedding=None,
+        actor=qa_user,
+    )
+
+    upload = UploadFile(
+        filename="evidence.png",
+        file=io.BytesIO(b"\x89PNG\r\n\x1a\n" + b"0" * 64),
+        headers=Headers({"content-type": "image/png"}),
+    )
+
+    response = await upload_evidence(error.error_id, upload, db=db_session, user=qa_user)
+
+    assert response.uploaded_by == qa_user.user_id
+    assert response.sha256 is not None and len(response.sha256) == 64

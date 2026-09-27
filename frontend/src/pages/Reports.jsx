@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
+import { exportReportCsv } from '../api/client';
 import { PrimaryButton } from '../components/PrimaryButton';
 import {
   BarChart3, 
@@ -54,8 +55,27 @@ export const Reports = () => {
     };
   });
 
-  const handleExportReport = () => {
-    addToast('Analytics & Department Report generated!', 'success');
+  const [exporting, setExporting] = useState(false);
+
+  const handleExportReport = async () => {
+    setExporting(true);
+    try {
+      const csv = await exportReportCsv();
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `qems-report-${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      addToast('Report exported.', 'success');
+    } catch (err) {
+      addToast(err.message || 'Failed to export report.', 'error');
+    } finally {
+      setExporting(false);
+    }
   };
 
   return (
@@ -66,8 +86,8 @@ export const Reports = () => {
           <p>Comprehensive Quality Error Management insights and performance metrics</p>
         </div>
 
-        <PrimaryButton onClick={handleExportReport}>
-          <Download size={18} /> Export Full Report
+        <PrimaryButton onClick={handleExportReport} disabled={exporting}>
+          <Download size={18} /> {exporting ? 'Exporting…' : 'Export Full Report'}
         </PrimaryButton>
       </div>
 

@@ -141,6 +141,8 @@ export const QAErrors = () => {
                 <th>Title</th>
                 <th>Department</th>
                 <th>Category</th>
+                <th>Risk</th>
+                <th>SLA</th>
                 <th>Severity</th>
                 <th>Status</th>
                 <th>Date</th>
@@ -150,7 +152,7 @@ export const QAErrors = () => {
             <tbody>
               {errorsLoading ? (
                 <tr>
-                  <td colSpan={8} style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
+                  <td colSpan={10} style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
                     Loading QA errors…
                   </td>
                 </tr>
@@ -160,7 +162,14 @@ export const QAErrors = () => {
                     <td style={{ fontWeight: 600, color: 'var(--primary)' }}>{err.id}</td>
                     <td style={{ maxWidth: '220px' }}>{err.title}</td>
                     <td>{err.department}</td>
-                    <td>{err.category}</td>
+                    <td className="risk-cell" title="Severity, SLA pressure, recurrence, rebuttal, impact and age — hover the detail page for the full breakdown">
+                      {err.riskScore != null ? Math.round(err.riskScore) : '—'}
+                    </td>
+                    <td>
+                      {err.slaState
+                        ? <span className={`sla-chip sla-${err.slaState}`}>{err.slaState.replace('_', ' ')}</span>
+                        : <span style={{ opacity: 0.4 }}>—</span>}
+                    </td>
                     <td>
                       <span className={`badge badge-${err.severity.toLowerCase()}`}>
                         {err.severity}
@@ -186,7 +195,7 @@ export const QAErrors = () => {
                 ))
               ) : (
                 <tr>
-                  <td colSpan={8} style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
+                  <td colSpan={10} style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
                     No QA error records matched your filters.
                   </td>
                 </tr>

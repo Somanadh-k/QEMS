@@ -180,6 +180,15 @@ Implements every endpoint listed in the report's Section 11 REST API doc:
 | GET    | `/api/v1/departments`             | any authenticated user              | — (added for frontend integration, see below) |
 | GET    | `/api/v1/categories`              | any authenticated user              | — (added for frontend integration, see below) |
 | GET    | `/api/v1/users`                   | any authenticated user              | — (added for frontend integration, see below) |
+| GET    | `/api/v1/errors/{id}/messages`    | any authenticated user (scoped)     | — (two-way communication, see below) |
+| POST   | `/api/v1/errors/{id}/messages`    | any authenticated user (scoped)     | — (two-way communication, see below) |
+| PATCH  | `/api/v1/messages/{id}/read`      | any authenticated user (scoped)     | — (two-way communication, see below) |
+| POST   | `/api/v1/messages/{id}/attachments` | any authenticated user (scoped)   | — (two-way communication, see below) |
+| GET    | `/api/v1/messages/attachments/{id}/url` | any authenticated user (scoped) | — (two-way communication, see below) |
+| GET    | `/api/v1/errors/{id}/notifications` | any authenticated user (scoped)   | — (notification system, see below) |
+| GET    | `/api/v1/notifications/unread-count` | any authenticated user            | — (notification system, see below) |
+| POST   | `/api/v1/notifications/test`      | Admin                               | — (notification system, see below) |
+| GET/PATCH | `/api/v1/notification-templates[/{id}]` | Admin                     | — (notification system, see below) |
 | GET    | `/health`                          | none                                 | — (orchestration health-check) |
 
 The three lookup endpoints (`app/api/v1/routers/lookups.py`) aren't in the report's Section 11 —
@@ -197,29 +206,25 @@ server-side only, independent of any UI restriction (Section 14.2).
 
 ### Evidence storage
 
-The report specifies Supabase Storage or Azure Blob Storage (Section 6.2). This build talks to
-a **local MinIO instance** — a real S3-compatible object store, not local disk — via
-`app/services/storage_service.py`. Every upload goes through `PUT /qems-evidence/evidence/<uuid>_<filename>`
-using boto3, and the returned `file_url` is a real, fetchable URL, not a stub. Because MinIO
-speaks the S3 API, swapping to real AWS S3, Supabase Storage, or Azure Blob's S3-compatible
-endpoint in production is a config change (`S3_ENDPOINT_URL`, credentials) — the code doesn't
-change. Files are validated for MIME type and size before upload (Section 4.6/14.5).
+The report specifies Supabase Storage or Azure Blob Storage (Section 6.2); this build talks to
+**Supabase Storage** — a real S3-compatible object store — via `app/services/storage_service.py`,
+using boto3 against Supabase's S3-compatible endpoint. Because that endpoint speaks the plain S3
+API, swapping to real AWS S3 or Azure Blob's S3-compatible endpoint later is a config change
+(`S3_ENDPOINT_URL`, credentials) — the code doesn't change. Files are validated for MIME type and
+size before upload (Section 4.6/14.5).
 
-One deliberate simplification: the MinIO bucket is set to public-read (`mc anonymous set
-download`) rather than generating presigned URLs per upload. Section 14.5 calls for signed,
-time-limited URLs in production — implementing that fully means every place `EvidenceSummary`
-gets serialized would need to call back into the storage service to mint a fresh URL instead of
-reading a static DB column, which is a real (if contained) piece of surgery. Flagging it here
-rather than doing it silently or claiming it's done.
+The bucket is **private**, not public-read: objects are addressed by an opaque storage key
+(never the client-supplied filename) and read only through short-lived (5 minute) presigned
+URLs, minted per request after an authorisation check and logged to `evidence_access_log`
+(Section 14.5, finding F-03). `EvidenceSummary`'s `file_url` column is retained for backwards
+compatibility but is no longer a directly-readable location — reads go through
+`GET /evidence/{id}/url`.
 
-Run `docker run` isn't used — MinIO and Mailpit (below) run as plain local processes, matching
-how Postgres is run in this project (see Setup). Start them with:
+Mailpit (below) runs as a plain local process; Supabase's Postgres and Storage are hosted, not
+run locally. Start Mailpit with:
 ```bash
-MINIO_ROOT_USER=qems_minio MINIO_ROOT_PASSWORD=qems_minio_secret \
-  minio server --address ":9000" --console-address ":9001" /opt/homebrew/var/minio-data &
 mailpit --smtp 127.0.0.1:1025 --listen 127.0.0.1:8025 &
 ```
-MinIO console: `http://localhost:9001` (login with the root user/password above).
 
 ### Email notifications (Section 4.7)
 
@@ -298,14 +303,125 @@ plumbing for search, not a judgment call).
 
 ---
 
+## Two-way communication & notifications
+
+Migration `e1f2a3b4c5d6` adds this on top of the existing schema — no table dropped or
+renamed, `notifications` extended in place (existing rows backfilled, not discarded).
+
+### Feature 1: conversation thread per QA Error
+
+`messages` / `message_attachments` (`app/models/message.py`), scoped to one `error_id`
+(CASCADE) — there is no way to create a message outside an error's context. Authorization
+is identical to `GET /errors/{id}` and `GET /evidence/{id}/url`: `visible_departments()`
+plus the raiser/assignee escape hatch (`app/api/v1/deps.py`). Attachments reuse
+`storage_service.py` (same MinIO/S3 bucket, opaque keys, presigned 5-minute download
+URLs, `messages/` key prefix instead of `evidence/`) — same validation, same
+`ATTACHMENT_UPLOADED`/`ATTACHMENT_DOWNLOADED` audit trail as evidence.
+
+**Communication status** (`Awaiting QA` / `Awaiting Stakeholder` / `Under Review` /
+`Evidence Requested` / `Response Received` / `Resolved`) is *derived*
+(`message_service.compute_communication_status`) from the error's own status plus the
+last message's sender/type — it is not a second, parallel state machine.
+
+**Real-time**: the frontend polls `GET /errors/{id}/messages` every ~8s while the panel
+is open. There is no WebSocket/SSE infrastructure anywhere else in this app yet, so
+adding one for this alone would be new infrastructure, not a wire-up — the seam is
+already the right shape for it later: `MessageService.create_message` is the single
+place a new message is created, so broadcasting it over a WS connection when one exists
+is a few lines there, not a redesign.
+
+### Feature 2: event-driven notifications
+
+```
+QEMS event (error_service.py / message_service.py / scheduler.py)
+    -> NotificationService.dispatch_event(event_type, recipient_id, error, context)
+    -> render (AI narration best-effort, else notification_templates -> DB template)
+    -> NotificationProvider.send()  (GmailProvider if configured, else SmtpProvider)
+    -> Notification row (PENDING/SENT/FAILED) + NotificationLog attempt row
+```
+
+Nothing else calls smtplib or the Gmail API directly — that is what makes adding a
+channel (WhatsApp/Teams/Slack/SMS) a new `NotificationProvider` in
+`app/services/notification_providers.py`, not a grep across the app. Templates are
+editable via `PATCH /notification-templates/{id}` (`{{error_id}}`, `{{severity}}`,
+`{{category}}`, `{{assignee}}`, `{{due_date}}`, `{{sender}}`, `{{message}}`,
+`{{decision}}`, `{{qems_url}}`); AI narration (`ai_notification_service.py`) tries first
+and always falls back to the template if OpenAI is unavailable or disabled
+(`AI_NARRATION_ENABLED`) — Gmail/AI availability never blocks core error-management
+workflow (creating/transitioning/deciding an error never waits on or fails because of
+either).
+
+**Retry**: a failed send is left `FAILED` with `next_retry_at` (exponential backoff,
+capped at `NOTIFICATION_MAX_RETRIES`); `workers/scheduler.py:run_notification_retry_tick`
+retries it every 5 minutes. **Deadlines**: `run_deadline_notification_tick` (also every 5
+minutes) fires `DEADLINE_APPROACHING` (due within 24h) and `ERROR_OVERDUE` (past due)
+once per error, deduplicated against existing `notifications` rows.
+
+### Gmail notification setup
+
+Gmail is **never required** — leave the four `GOOGLE_*`/`GMAIL_SENDER` variables blank
+and QEMS sends through the existing SMTP settings (Mailpit in dev) instead.
+`GmailProvider.is_configured()` gates every code path that touches the Gmail API.
+
+To actually use Gmail:
+
+1. **Google Cloud project**: create one at [console.cloud.google.com](https://console.cloud.google.com).
+2. **Enable the Gmail API**: APIs & Services → Library → search "Gmail API" → Enable.
+3. **OAuth consent screen**: APIs & Services → OAuth consent screen → External (or
+   Internal for a Workspace org) → fill in app name/support email → add your own Gmail
+   address as a test user (consent screens in "Testing" mode only work for listed users).
+4. **OAuth client**: APIs & Services → Credentials → Create Credentials → OAuth client ID
+   → type **Desktop app** (used only to run the one-time script below; the app's own
+   backend never redirects a browser through Google). Note the Client ID/Secret. Then
+   open that client again and add `http://localhost:8765/` under **Authorized redirect
+   URIs** → Save — this must match exactly what `scripts/gmail_oauth_setup.py` listens
+   on, or step 6 fails with `Error 400: redirect_uri_mismatch`.
+5. **Scopes** (minimum required, both requested by `notification_providers.py`):
+   - `https://www.googleapis.com/auth/gmail.send` — outbound notification email.
+   - `https://www.googleapis.com/auth/gmail.modify` — list/read inbound replies and
+     clear their `UNREAD` label after they're attached to a QEMS conversation (broader
+     `.modify` is needed instead of `.readonly` only because marking-as-read requires
+     write access to labels; QEMS never deletes or sends as anything other than itself).
+6. **Get a refresh token** (one-time, local machine only):
+   ```bash
+   cd backend
+   pip install -r requirements.txt   # includes google-auth-oauthlib for this step
+   GOOGLE_CLIENT_ID=... GOOGLE_CLIENT_SECRET=... python -m scripts.gmail_oauth_setup
+   ```
+   This opens a browser for the consent screen and prints a `GOOGLE_REFRESH_TOKEN` to
+   paste into `.env`.
+7. **Environment variables** (`.env`):
+   ```env
+   GOOGLE_CLIENT_ID=...
+   GOOGLE_CLIENT_SECRET=...
+   GOOGLE_REDIRECT_URI=http://localhost:8765/   # must match step 4's registered redirect URI
+   GOOGLE_REFRESH_TOKEN=...          # from step 6
+   GMAIL_SENDER=you@yourdomain.com   # must be the account the refresh token belongs to
+   ```
+8. **Local development**: nothing else to do — `run_gmail_inbound_tick` (every 2 minutes)
+   and outbound send both pick these up automatically on next request/tick.
+9. **Production**: store the same four variables as real secrets (not committed, not in
+   `.env` in source control) in whatever secret manager your deployment uses; rotate the
+   refresh token by re-running step 6 if it's ever revoked (Google revokes long-unused
+   or manually-revoked refresh tokens).
+
+**Not implemented**: a full server-side OAuth *authorization-code* redirect flow (a
+"Connect Gmail" button in the UI) — `GOOGLE_REDIRECT_URI` is defined and reserved for
+that, but the refresh token is obtained via the one-time local script above instead,
+which is the correct pattern for a single-tenant service account style integration like
+this one (QEMS sends *as* one shared mailbox, not as each individual user).
+
+---
+
 ## Setup
 
 ### Prerequisites
 
 - Python 3.11+ (built and tested on 3.13)
-- PostgreSQL 15+ with the `pgvector` extension available
-- MinIO (object storage) and Mailpit (SMTP + web inbox) — `brew install minio minio-mc mailpit`.
-  Only needed for evidence upload and email notifications; everything else works without them.
+- A [Supabase](https://supabase.com) project — Postgres (with `pgvector`) and evidence Storage
+  both live there now, see below
+- Mailpit (SMTP + web inbox) for email notifications, still local — `brew install mailpit`.
+  Only needed for email notifications; everything else works without it.
 - An OpenAI API key (only needed for the `/ai/*` endpoints — everything else works without it)
 
 ### Install
@@ -317,32 +433,52 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### Configure
+### Database & Storage (Supabase)
+
+1. Create a project at [supabase.com](https://supabase.com/dashboard) (free tier is fine) and
+   note the DB password you set.
+2. Enable pgvector: Dashboard → Database → Extensions → search "vector" → Enable (or run
+   `create extension vector with schema extensions;` in the SQL editor).
+3. Get the connection string: Project Settings → Database → Connection string → URI. Use the
+   **Direct connection** (or **Session pooler** as an IPv4 fallback) on port 5432 — not the
+   **Transaction pooler** (port 6543), which doesn't support the prepared statements
+   asyncpg/SQLAlchemy use by default.
+4. Create a private evidence bucket: Dashboard → Storage → New bucket → `qems-evidence`, left
+   **private** (evidence is served through short-lived presigned URLs, not a public bucket —
+   see `storage_service.py`'s F-03 fix).
+5. Get S3-compatible credentials: Project Settings → Storage → S3 Connection → generate an
+   access key pair, and copy the endpoint/region shown there.
+6. Fill in `.env` (see `.env.example` for the exact shape) with the connection string and S3
+   values from steps 3 and 5, then:
 
 ```bash
 cp .env.example .env
-# edit .env: set DATABASE_URL, JWT_SECRET, OPENAI_API_KEY
-```
-
-### Database
-
-```bash
-# create the database/role (adjust to your local Postgres setup), then:
+# edit .env: DATABASE_URL, S3_*, JWT_SECRET, OPENAI_API_KEY
 alembic upgrade head
 python -m app.tasks.seed          # roles, SLA policies, departments, categories
 python -m app.tasks.seed_users    # one test user per role, password: Password123!
 ```
 
-### Object storage & email
+**Alternative to `alembic upgrade head`:** paste [`scripts/supabase_schema.sql`](scripts/supabase_schema.sql)
+into Supabase's SQL Editor and run it there instead — the identical schema, generated
+directly from these migrations, for when you'd rather not hand your DB connection string
+to anything. `python -m app.tasks.seed`/`seed_users` still need to run against
+`DATABASE_URL` afterward (they hash passwords in Python via bcrypt).
+
+That script is derived, not hand-maintained — regenerate it after any migration change:
+```bash
+alembic upgrade head --sql > scripts/supabase_schema.sql
+```
+As of this writing one migration (`e5f6a7b8c9d0`, the SLA matrix seed) runs a live
+conditional query offline mode can't execute and has to be spliced in by hand from its
+own literal values instead — see the comment at the top of `supabase_schema.sql` for the
+exact two-command sequence (`alembic upgrade head --sql` up to the migration before it,
+then `alembic upgrade <that-migration>:head --sql` for everything after) if a future
+migration hits the same limitation.
+
+### Email
 
 ```bash
-# MinIO — object storage for evidence uploads
-MINIO_ROOT_USER=qems_minio MINIO_ROOT_PASSWORD=qems_minio_secret \
-  minio server --address ":9000" --console-address ":9001" /opt/homebrew/var/minio-data &
-mc alias set local http://localhost:9000 qems_minio qems_minio_secret
-mc mb local/qems-evidence
-mc anonymous set download local/qems-evidence   # public-read; see "Known limitation" above
-
 # Mailpit — catches every email QEMS sends, viewable at http://localhost:8025
 mailpit --smtp 127.0.0.1:1025 --listen 127.0.0.1:8025 &
 ```

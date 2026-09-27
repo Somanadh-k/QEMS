@@ -11,6 +11,7 @@ import { QAErrors } from './pages/QAErrors';
 import { CreateError } from './pages/CreateError';
 import { ErrorDetails } from './pages/ErrorDetails';
 import { Reports } from './pages/Reports';
+import { EscalationInbox } from './pages/EscalationInbox';
 import { Profile } from './pages/Profile';
 
 // Mounted once at the root (not per-page) so the WebGL canvas persists across navigation
@@ -41,6 +42,7 @@ const AppContent = () => {
         {activeTab === 'qa-errors' && <QAErrors />}
         {activeTab === 'create-error' && <CreateError />}
         {activeTab === 'error-details' && <ErrorDetails />}
+        {activeTab === 'escalations' && <EscalationInbox />}
         {activeTab === 'reports' && <Reports />}
         {activeTab === 'profile' && <Profile />}
       </div>

@@ -3,12 +3,14 @@ import { useApp } from '../context/AppContext';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { Avatar } from '../components/Avatar';
 import { Save, RotateCcw, Camera, X, ShieldCheck, Award, Bug, CheckCircle2, LogOut } from 'lucide-react';
+import { updateProfile } from '../api/client';
 
 const MAX_AVATAR_SIZE_MB = 2;
 
 export const Profile = () => {
   const { user, setUser, departments, addToast, logoutUser } = useApp();
   const avatarInputRef = useRef(null);
+  const [saving, setSaving] = useState(false);
 
   const [formData, setFormData] = useState({
     name: user.name,
@@ -23,24 +25,45 @@ export const Profile = () => {
     confirmPassword: ''
   });
 
-  const handleSave = (e) => {
+  const handleSave = async (e) => {
     e.preventDefault();
     if (formData.newPassword && formData.newPassword !== formData.confirmPassword) {
       addToast('New passwords do not match.', 'error');
       return;
     }
+    if (formData.newPassword && !formData.currentPassword) {
+      addToast('Please enter your current password to set a new one.', 'error');
+      return;
+    }
 
-    setUser(prev => ({
-      ...prev,
-      name: formData.name,
+    const payload = {
+      full_name: formData.name,
       email: formData.email,
       phone: formData.phone,
-      department: formData.department,
-      address: formData.address
-    }));
+      address: formData.address,
+    };
+    if (formData.newPassword) {
+      payload.new_password = formData.newPassword;
+      payload.current_password = formData.currentPassword;
+    }
 
-    // The backend doesn't expose a profile-update endpoint yet, so this is local-only for now.
-    addToast('Profile preferences saved locally (not yet synced to the server).', 'info');
+    setSaving(true);
+    try {
+      const updated = await updateProfile(payload);
+      setUser(prev => ({
+        ...prev,
+        name: updated.full_name,
+        email: updated.email,
+        phone: updated.phone,
+        address: updated.address,
+      }));
+      setFormData(prev => ({ ...prev, currentPassword: '', newPassword: '', confirmPassword: '' }));
+      addToast('Profile saved successfully.', 'success');
+    } catch (err) {
+      addToast(err.message || 'Failed to save profile.', 'error');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleAvatarFileSelected = (e) => {
@@ -203,6 +226,17 @@ export const Profile = () => {
               <h3 style={{ fontSize: '1rem', color: 'var(--text-main)', marginBottom: '0.75rem' }}>Security & Password</h3>
             </div>
 
+            <div className="form-group full-width">
+              <label>Current Password</label>
+              <input
+                type="password"
+                className="form-control"
+                placeholder="Required only when changing password"
+                value={formData.currentPassword}
+                onChange={(e) => setFormData({ ...formData, currentPassword: e.target.value })}
+              />
+            </div>
+
             <div className="form-group">
               <label>New Password</label>
               <input 
@@ -234,51 +268,14 @@ export const Profile = () => {
               >
                 <LogOut size={16} /> Log Out of Account
               </button>
-              <PrimaryButton type="submit" size="lg">
-                <Save size={16} /> Save Changes
+              <PrimaryButton type="submit" size="lg" disabled={saving}>
+                <Save size={16} /> {saving ? 'Saving…' : 'Save Changes'}
               </PrimaryButton>
             </div>
           </form>
         </div>
 
-        {/* Right Stats Sidebar */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-          <div className="glass-card">
-            <h2 style={{ fontSize: '1.1rem', color: 'var(--text-main)', marginBottom: '1.25rem' }}>QA Achievements</h2>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                <div style={{ background: 'var(--primary-light)', padding: '0.75rem', borderRadius: 'var(--radius-md)', color: 'var(--primary)' }}>
-                  <Bug size={24} />
-                </div>
-                <div>
-                  <h3 style={{ fontSize: '1.4rem', color: 'var(--text-main)' }}>142</h3>
-                  <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Errors Reviewed & Closed</p>
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                <div style={{ background: 'var(--status-closed-bg)', padding: '0.75rem', borderRadius: 'var(--radius-md)', color: 'var(--status-closed-text)' }}>
-                  <Award size={24} />
-                </div>
-                <div>
-                  <h3 style={{ fontSize: '1.4rem', color: 'var(--text-main)' }}>98.5%</h3>
-                  <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>QA Audit Accuracy Score</p>
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                <div style={{ background: 'rgba(123, 116, 129, 0.12)', padding: '0.75rem', borderRadius: 'var(--radius-md)', color: 'var(--secondary)' }}>
-                  <ShieldCheck size={24} />
-                </div>
-                <div>
-                  <h3 style={{ fontSize: '1.4rem', color: 'var(--text-main)' }}>3+ Years</h3>
-                  <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>QA Management Seniority</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
       </div>
     </div>
   );

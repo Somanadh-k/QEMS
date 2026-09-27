@@ -1,11 +1,31 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { Avatar } from './Avatar';
+import { getUnreadNotificationCount } from '../api/client';
 import { Search, Bell, Sun, Moon, Calendar, LogOut, User, ChevronDown } from 'lucide-react';
+
+const NOTIFICATION_POLL_MS = 30000;
 
 export const Navbar = () => {
   const { user, searchQuery, setSearchQuery, setActiveTab, theme, toggleTheme, logoutUser } = useApp();
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    const poll = async () => {
+      try {
+        const { count } = await getUnreadNotificationCount();
+        if (!cancelled) setUnreadNotifications(count);
+      } catch {
+        // Notification count is a nice-to-have indicator, not core workflow -- a
+        // transient failure here must never surface as a user-facing error.
+      }
+    };
+    poll();
+    const interval = setInterval(poll, NOTIFICATION_POLL_MS);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, []);
 
   const formattedDate = new Date().toLocaleDateString('en-US', {
     weekday: 'short',
@@ -41,9 +61,9 @@ export const Navbar = () => {
           {theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}
         </button>
 
-        <button className="icon-btn" title="Notifications">
+        <button className="icon-btn" title={unreadNotifications > 0 ? `${unreadNotifications} unread notifications` : 'Notifications'}>
           <Bell size={18} />
-          <span className="badge-dot"></span>
+          {unreadNotifications > 0 && <span className="badge-dot"></span>}
         </button>
 
         {/* User Profile Dropdown */}

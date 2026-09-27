@@ -65,7 +65,7 @@ export const Dashboard = () => {
       <div className="glass-card" style={{ marginBottom: '2rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem', background: 'linear-gradient(135deg, rgba(123, 116, 129, 0.12), rgba(156, 148, 163, 0.12))' }}>
         <div>
           <h1 style={{ fontSize: '1.8rem', color: 'var(--text-main)', marginBottom: '0.4rem' }}>
-            Welcome Back, {user.name} 👋
+            Welcome Back, {user.name} 
           </h1>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.95rem' }}>
             Monitor quality metrics, manage QA errors, and review reports from one centralized platform.

@@ -7,3 +7,5 @@ class EvidenceUploadResponse(BaseModel):
     file_url: str
     file_type: str
     file_size_kb: int
+    uploaded_by: int
+    sha256: str | None = None

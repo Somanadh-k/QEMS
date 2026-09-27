@@ -10,13 +10,14 @@ const emptyForm = {
   title: '',
   department_id: '',
   category_id: '',
+  process_id: '',
   severity: 'Medium',
   date_discovered: todayIso(),
   description: '',
 };
 
 export const CreateError = () => {
-  const { addError, setActiveTab, setSelectedErrorId, departments, categories, addToast } = useApp();
+  const { addError, setActiveTab, setSelectedErrorId, departments, categories, processes, addToast } = useApp();
 
   const [formData, setFormData] = useState(emptyForm);
   const [file, setFile] = useState(null);
@@ -35,6 +36,9 @@ export const CreateError = () => {
         title: formData.title,
         description: formData.description,
         category_id: Number(formData.category_id),
+        // Optional, but attaching it is what lets recurrence detection measure
+        // process concentration — the heaviest component of the recurrence score.
+        process_id: formData.process_id ? Number(formData.process_id) : null,
         severity: formData.severity,
         department_id: Number(formData.department_id),
         date_discovered: formData.date_discovered,
@@ -141,6 +145,24 @@ export const CreateError = () => {
                 <option key={c.category_id} value={c.category_id}>{c.name}</option>
               ))}
             </select>
+          </div>
+
+          <div className="form-group">
+            <label>Business Process</label>
+            <select
+              className="form-control"
+              value={formData.process_id}
+              onChange={(e) => setFormData({ ...formData, process_id: e.target.value })}
+            >
+              <option value="">Not specified</option>
+              {processes.map((p) => (
+                <option key={p.process_id} value={p.process_id}>{p.name}</option>
+              ))}
+            </select>
+            <small style={{ color: 'var(--text-muted)', fontSize: '0.78rem' }}>
+              Optional. Recurring defects are detected per process — leaving this blank
+              weakens the recurrence signal for this error.
+            </small>
           </div>
 
           <div className="form-group">

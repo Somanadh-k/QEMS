@@ -10,8 +10,8 @@ from app.models import Category, Department, Role, SLAPolicy
 
 DEFAULT_ROLES = ["Admin", "QA Reviewer", "Department Owner", "Viewer"]
 DEFAULT_SLA_POLICIES = [("Critical", 4), ("High", 24), ("Medium", 72), ("Low", 168)]
-DEFAULT_DEPARTMENTS = ["Production", "Packaging", "Quality Assurance", "Logistics"]
-DEFAULT_CATEGORIES = ["Labeling Error", "Dimensional Defect", "Documentation Gap", "Process Deviation"]
+DEFAULT_DEPARTMENTS = ["Engineering", "Quality Assurance", "DevOps", "Product", "Customer Support"]
+DEFAULT_CATEGORIES = ["Functional Bug", "UI/UX Issue", "Performance Issue", "Security Vulnerability", "Documentation Gap"]
 
 
 async def seed() -> None:

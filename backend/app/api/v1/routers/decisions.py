@@ -12,7 +12,9 @@ from app.services.error_service import ErrorService
 router = APIRouter(prefix="/errors", tags=["decisions"])
 
 
-@router.post("/{error_id}/decision", response_model=DecisionCreateResponse)
+# 201: this creates a qa_decisions row, matching POST /errors and POST /rebuttals.
+# Previously 200, which made the API inconsistent for generated clients (finding O-03).
+@router.post("/{error_id}/decision", response_model=DecisionCreateResponse, status_code=201)
 async def record_decision(
     error_id: int,
     payload: DecisionCreateRequest,

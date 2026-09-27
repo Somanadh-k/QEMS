@@ -7,7 +7,8 @@ import {
   PlusCircle, 
   BarChart3, 
   User, 
-  LogOut 
+  LogOut,
+  AlertOctagon
 } from 'lucide-react';
 
 export const Sidebar = () => {
@@ -17,6 +18,7 @@ export const Sidebar = () => {
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'qa-errors', label: 'QA Errors', icon: AlertTriangle },
     { id: 'create-error', label: 'Create Error', icon: PlusCircle },
+    { id: 'escalations', label: 'Escalations', icon: AlertOctagon },
     { id: 'reports', label: 'Reports', icon: BarChart3 },
     { id: 'profile', label: 'Profile', icon: User },
   ];

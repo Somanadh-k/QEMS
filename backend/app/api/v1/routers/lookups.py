@@ -5,7 +5,7 @@ from sqlalchemy.orm import selectinload
 
 from app.api.v1.deps import get_current_user
 from app.core.db import get_db
-from app.models import Category, Department, User, UserRole
+from app.models import Category, Department, Process, User, UserRole
 from app.schemas.lookups import CategoryOut, DepartmentOut, UserOut
 
 router = APIRouter(tags=["lookups"])
@@ -20,6 +20,24 @@ only ever return IDs, matching the report's DDL, which stores foreign keys, not 
 async def list_departments(db: AsyncSession = Depends(get_db), _user: User = Depends(get_current_user)):
     result = await db.execute(select(Department).order_by(Department.name))
     return result.scalars().all()
+
+
+@router.get("/processes")
+async def list_processes(db: AsyncSession = Depends(get_db), _user: User = Depends(get_current_user)):
+    """Business processes, so the create-error form can attach one.
+
+    Recurrence concentration is measured per process; without a process on the record the
+    heaviest component of the recurrence score can never fire.
+    """
+    rows = (
+        await db.execute(
+            select(Process).where(Process.active.is_(True)).order_by(Process.name)
+        )
+    ).scalars().all()
+    return [
+        {"process_id": p.process_id, "name": p.name, "department_id": p.department_id}
+        for p in rows
+    ]
 
 
 @router.get("/categories", response_model=list[CategoryOut])

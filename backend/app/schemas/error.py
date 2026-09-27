@@ -1,16 +1,23 @@
 from datetime import date, datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ErrorCreateRequest(BaseModel):
-    title: str
-    description: str
+    # max_length matches the errors.title column (String(200)); without it an
+    # over-length title reaches asyncpg as a StringDataRightTruncationError, which is
+    # not an IntegrityError and was surfacing as an unhandled 500 (finding D-04).
+    title: str = Field(min_length=1, max_length=200)
+    description: str = Field(min_length=1)
     category_id: int
     severity: str
     department_id: int
     date_discovered: date
     assigned_to: int | None = None
+    # Recurrence is a property of a process, not a category. Without this the
+    # process-concentration component of the recurrence score (weight 0.25) can never
+    # fire for anything created through the API.
+    process_id: int | None = None
 
 
 class ErrorCreateResponse(BaseModel):
@@ -34,6 +41,8 @@ class EvidenceSummary(BaseModel):
     file_url: str
     file_type: str
     file_size_kb: int
+    uploaded_by: int
+    sha256: str | None = None
 
 
 class RebuttalSummary(BaseModel):
@@ -68,6 +77,12 @@ class ErrorListItem(BaseModel):
     category_id: int
     due_at: datetime | None
     created_at: datetime
+    # Governance fields, so the queue can sort and colour by risk without a second call.
+    sla_state: str | None = None
+    sla_due_at: datetime | None = None
+    sla_clock_owner_role: str | None = None
+    risk_score: float | None = None
+    escalation_level: int | None = None
 
 
 class ErrorListResponse(BaseModel):
@@ -85,6 +100,7 @@ class ErrorDetailResponse(BaseModel):
     title: str
     description: str
     category_id: int
+    process_id: int | None = None
     severity: str
     status: str
     department_id: int

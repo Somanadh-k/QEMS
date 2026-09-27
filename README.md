@@ -32,10 +32,14 @@ matching defaults.
 
 ## First-time setup
 
+Database and evidence storage run on [Supabase](https://supabase.com) (Postgres + pgvector,
+and S3-compatible Storage) instead of a local Postgres/MinIO install — see
+[`backend/README.md`](backend/README.md#database--storage-supabase) for creating the project,
+enabling pgvector, and getting the connection string and S3 keys.
+
 ```bash
-# Database (PostgreSQL 15+ with the pgvector extension)
 cd backend
-cp .env.example .env        # edit DATABASE_URL, JWT_SECRET, OPENAI_API_KEY
+cp .env.example .env        # fill in DATABASE_URL, S3_*, JWT_SECRET, OPENAI_API_KEY
 alembic upgrade head
 python -m app.tasks.seed          # roles, SLA policies, departments, categories
 python -m app.tasks.seed_users    # one demo user per role

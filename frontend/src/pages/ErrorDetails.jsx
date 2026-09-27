@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { aiRootCause, aiSimilar, ApiError } from '../api/client';
+import { CommunicationPanel } from '../components/CommunicationPanel';
 import { PrimaryButton } from '../components/PrimaryButton';
+import { QualitySignal } from '../components/QualitySignal';
+import { SlaStrip } from '../components/SlaStrip';
 import {
   ArrowLeft,
   Printer,
@@ -193,6 +196,12 @@ export const ErrorDetails = () => {
                 {selectedError.description}
               </div>
             </div>
+
+            {/* Quality Signal (QS-01) — computed recurrence evidence, then interpretation.
+                Deliberately placed above the older root-cause suggestion and outside the
+                decision form: it informs the decision, it never pre-fills it. */}
+            <SlaStrip errorId={selectedError.pk} />
+            <QualitySignal errorId={selectedError.pk} />
 
             {/* AI Root Cause */}
             <div>
@@ -430,6 +439,9 @@ export const ErrorDetails = () => {
           </p>
         )}
       </div>
+
+      {/* Two-way communication (Feature 1) -- always scoped to this error */}
+      <CommunicationPanel errorId={selectedError.pk} currentUser={user} addToast={addToast} />
     </div>
   );
 };

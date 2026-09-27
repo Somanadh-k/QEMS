@@ -703,3 +703,114 @@ textarea.form-control {
     padding: 1rem;
   }
 }
+
+/* ============================================================
+   Quality Signal rail + governance surfaces
+   Facts read above interpretation; the AI block is deliberately
+   subordinate (smaller, muted, behind a labelled divider).
+   ============================================================ */
+.signal-panel {
+  border: 1px solid rgba(140, 140, 160, 0.22);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  padding: 16px 18px;
+  margin-bottom: 18px;
+}
+.signal-head { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
+.signal-head h3 { font-size: 15px; margin: 0; flex-shrink: 0; }
+.signal-band {
+  font-size: 10px; letter-spacing: 0.08em; font-weight: 600;
+  padding: 3px 8px; border-radius: 3px; margin-left: auto;
+}
+.signal-icon-btn {
+  background: none; border: none; cursor: pointer; color: inherit;
+  opacity: 0.55; padding: 4px; display: flex;
+}
+.signal-icon-btn:hover { opacity: 1; }
+
+.signal-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); gap: 1px;
+  background: rgba(140,140,160,0.18); border: 1px solid rgba(140,140,160,0.18); border-radius: 6px;
+  overflow: hidden; margin-bottom: 14px; }
+.signal-metric { background: rgba(20, 20, 26, 0.55); padding: 10px 12px; }
+.signal-metric-value { font-size: 21px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.signal-metric-label { font-size: 10.5px; opacity: 0.62; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 2px; }
+.signal-metric-hint { font-size: 10px; opacity: 0.4; margin-top: 1px; }
+
+.signal-breakdown { margin-bottom: 14px; }
+.signal-breakdown-title { font-size: 11px; opacity: 0.6; margin-bottom: 7px; text-transform: uppercase; letter-spacing: 0.05em; }
+.signal-bar-row { display: grid; grid-template-columns: 130px 1fr 32px; gap: 8px; align-items: center;
+  font-size: 11.5px; margin-bottom: 4px; }
+.signal-bar-track { height: 5px; background: rgba(140,140,160,0.18); border-radius: 3px; overflow: hidden; }
+.signal-bar-fill { height: 100%; background: #7B7481; border-radius: 3px; }
+.signal-bar-value { font-variant-numeric: tabular-nums; opacity: 0.65; text-align: right; }
+
+.signal-divider { display: flex; align-items: center; gap: 10px; margin: 16px 0 10px; }
+.signal-divider::after { content: ''; flex: 1; height: 1px; background: rgba(154,106,6,0.35); }
+.signal-divider span { font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; color: #c9974f; }
+
+.signal-narrative p { font-size: 13px; margin: 0 0 8px; }
+.signal-narrative .signal-label { font-weight: 600; }
+.signal-narrative ul { margin: 0 0 8px; padding-left: 18px; font-size: 12.5px; opacity: 0.85; }
+.signal-narrative li { margin-bottom: 3px; }
+.signal-action { font-size: 12.5px; opacity: 0.9; }
+
+.signal-degraded, .signal-empty { display: flex; gap: 10px; align-items: flex-start;
+  font-size: 12.5px; opacity: 0.75; padding: 4px 0; }
+.signal-degraded p, .signal-empty p { margin: 3px 0 0; font-size: 12px; opacity: 0.85; }
+
+.signal-neighbours, .signal-provenance { margin-top: 12px; font-size: 12px; }
+.signal-neighbours summary, .signal-provenance summary { cursor: pointer; opacity: 0.65; font-size: 11.5px; }
+.signal-neighbour { display: grid; grid-template-columns: 130px 1fr 90px; gap: 8px;
+  padding: 5px 0; border-bottom: 1px solid rgba(140,140,160,0.12); font-size: 11.5px; }
+.signal-neighbour code { opacity: 0.7; }
+.signal-neighbour em { opacity: 0.55; font-style: normal; }
+.signal-provenance div { padding: 3px 0; font-size: 11.5px; opacity: 0.75; }
+.signal-warn { color: #d9ab5c; }
+
+.signal-disclaimer { font-size: 10.5px; opacity: 0.5; margin: 12px 0 10px; line-height: 1.5; }
+.signal-ack-row { display: flex; gap: 6px; flex-wrap: wrap; }
+.signal-ack button, .escalation-ack button, .ghost-btn {
+  background: rgba(140,140,160,0.14); border: 1px solid rgba(140,140,160,0.25);
+  color: inherit; border-radius: 5px; padding: 5px 11px; font-size: 12px;
+  cursor: pointer; display: inline-flex; align-items: center; gap: 5px;
+}
+.signal-ack button:hover, .escalation-ack button:hover, .ghost-btn:hover { background: rgba(140,140,160,0.24); }
+.signal-ack textarea, .escalation-ack input {
+  width: 100%; background: rgba(0,0,0,0.22); border: 1px solid rgba(140,140,160,0.25);
+  border-radius: 5px; color: inherit; padding: 7px 9px; font-size: 12.5px;
+  margin-bottom: 7px; font-family: inherit;
+}
+.signal-acked { font-size: 12px; opacity: 0.7; padding: 6px 0; }
+
+/* --- escalation inbox --- */
+.escalation-list { display: flex; flex-direction: column; gap: 10px; }
+.escalation-card { border: 1px solid rgba(140,140,160,0.22); border-left: 3px solid #a32f2f;
+  border-radius: 8px; background: rgba(255,255,255,0.03); padding: 12px 15px; }
+.escalation-top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 12.5px; }
+.escalation-icon { color: #d98b84; flex-shrink: 0; }
+.escalation-level, .escalation-trigger {
+  font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase;
+  padding: 2px 7px; border-radius: 3px; background: rgba(163,47,47,0.16); color: #d98b84;
+}
+.escalation-when { margin-left: auto; opacity: 0.5; font-size: 11px; }
+.escalation-ack { display: flex; gap: 7px; margin-top: 10px; align-items: center; }
+.escalation-ack input { margin-bottom: 0; }
+.escalation-ack button { white-space: nowrap; }
+.escalation-acked { margin-top: 8px; font-size: 12px; opacity: 0.7; display: flex; gap: 6px; align-items: center; }
+
+.link-btn { background: none; border: none; color: #9a94a3; cursor: pointer;
+  font-size: 12.5px; padding: 0; text-decoration: underline; font-family: inherit; }
+
+/* --- SLA + risk chips in the governance queue --- */
+.sla-chip { font-size: 10px; letter-spacing: 0.05em; padding: 2px 7px; border-radius: 3px;
+  text-transform: uppercase; font-weight: 600; white-space: nowrap; }
+.sla-ON_TRACK { background: rgba(43,107,71,0.16); color: #7cc79b; }
+.sla-AT_RISK  { background: rgba(154,106,6,0.18); color: #d9ab5c; }
+.sla-BREACHED { background: rgba(163,47,47,0.18); color: #d98b84; }
+.sla-PAUSED   { background: rgba(140,140,160,0.16); color: #9a94a3; }
+.sla-MET      { background: rgba(43,107,71,0.12); color: #6bab86; }
+.risk-cell { font-variant-numeric: tabular-nums; font-weight: 600; }
+
+.spin { animation: qems-spin 1s linear infinite; }
+@keyframes qems-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spin { animation: none; } }
